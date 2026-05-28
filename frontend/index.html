@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Company Knowledge Copilot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .citation-card { transition: max-height 0.2s ease; }
+    .streaming-cursor::after { content: "▋"; animation: blink 0.7s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col" id="app">
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-3 shadow-sm">
+  <div class="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">K</div>
+  <div>
+    <h1 class="text-lg font-semibold text-slate-800">Company Knowledge Copilot</h1>
+    <p class="text-xs text-slate-500">Ask questions about internal policies and documentation</p>
+  </div>
+  <div class="ml-auto flex items-center gap-2">
+    <span id="health-dot" class="w-2 h-2 rounded-full bg-slate-300"></span>
+    <span id="health-label" class="text-xs text-slate-500">checking...</span>
+  </div>
+</header>
+
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- ── Sidebar: history ──────────────────────────────────────────────── -->
+  <aside class="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex">
+    <div class="p-4 border-b border-slate-100">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide">Recent Questions</p>
+    </div>
+    <div id="history-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+  </aside>
+
+  <!-- ── Main chat area ─────────────────────────────────────────────────── -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+    <div id="messages" class="flex-1 overflow-y-auto p-6 space-y-6">
+      <!-- Welcome -->
+      <div class="flex justify-center">
+        <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-6 max-w-xl text-center">
+          <div class="text-3xl mb-3">📚</div>
+          <h2 class="font-semibold text-slate-700 mb-2">Ask anything about company policies</h2>
+          <p class="text-sm text-slate-500 mb-4">I'll search our internal documents and cite my sources.</p>
+          <div class="flex flex-wrap gap-2 justify-center">
+            <button onclick="askExample(this)" class="example-btn text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">What's our remote work policy in Norway?</button>
+            <button onclick="askExample(this)" class="example-btn text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">How do I request parental leave?</button>
+            <button onclick="askExample(this)" class="example-btn text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-50">What are the data handling requirements for GDPR?</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Input bar ──────────────────────────────────────────────────── -->
+    <div class="border-t border-slate-200 bg-white p-4">
+      <div class="max-w-3xl mx-auto flex gap-3">
+        <input
+          id="query-input"
+          type="text"
+          placeholder="Ask a question about company knowledge..."
+          class="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+          onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendQuery()}"
+        />
+        <button
+          id="send-btn"
+          onclick="sendQuery()"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-5 py-3 text-sm font-medium transition-colors disabled:opacity-50"
+        >Send</button>
+      </div>
+      <p class="text-center text-xs text-slate-400 mt-2">Answers are grounded in retrieved documents. Always verify critical information.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+const API_BASE = "";  // same origin
+let lastQueryId = null;
+
+// ── Health check ──────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API_BASE}/api/v1/health`);
+    const d = await r.json();
+    const dot = document.getElementById("health-dot");
+    const label = document.getElementById("health-label");
+    if (d.status === "healthy") {
+      dot.className = "w-2 h-2 rounded-full bg-green-500";
+      label.textContent = `${d.components.chunk_count || 0} chunks indexed`;
+    } else {
+      dot.className = "w-2 h-2 rounded-full bg-yellow-500";
+      label.textContent = d.status;
+    }
+  } catch {
+    document.getElementById("health-dot").className = "w-2 h-2 rounded-full bg-red-400";
+    document.getElementById("health-label").textContent = "offline";
+  }
+}
+
+// ── Send query ────────────────────────────────────────────────────────────
+async function sendQuery(queryOverride) {
+  const input = document.getElementById("query-input");
+  const query = queryOverride || input.value.trim();
+  if (!query) return;
+
+  input.value = "";
+  document.getElementById("send-btn").disabled = true;
+
+  appendUserMessage(query);
+  addToHistory(query);
+
+  const msgId = "msg-" + Date.now();
+  appendAssistantMessage(msgId);
+
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query,
+        user_id: "web-user",
+        user_groups: [],
+        top_k: 5,
+        stream: false
+      })
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    lastQueryId = data.query_id;
+
+    renderAnswer(msgId, data);
+  } catch (err) {
+    renderError(msgId, err.message);
+  } finally {
+    document.getElementById("send-btn").disabled = false;
+  }
+}
+
+function askExample(btn) {
+  sendQuery(btn.textContent.trim());
+}
+
+// ── Message builders ──────────────────────────────────────────────────────
+function appendUserMessage(text) {
+  const msgs = document.getElementById("messages");
+  msgs.insertAdjacentHTML("beforeend", `
+    <div class="flex justify-end">
+      <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 max-w-xl text-sm">${escHtml(text)}</div>
+    </div>`);
+  scrollBottom();
+}
+
+function appendAssistantMessage(id) {
+  const msgs = document.getElementById("messages");
+  msgs.insertAdjacentHTML("beforeend", `
+    <div id="${id}" class="flex gap-3">
+      <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0 mt-1">K</div>
+      <div class="flex-1">
+        <div id="${id}-text" class="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-slate-700 streaming-cursor">
+          <span class="text-slate-400 text-xs">Searching documents...</span>
+        </div>
+        <div id="${id}-citations" class="mt-3 space-y-2"></div>
+        <div id="${id}-feedback" class="mt-2 flex gap-2"></div>
+        <div id="${id}-meta" class="mt-1 text-xs text-slate-400"></div>
+      </div>
+    </div>`);
+  scrollBottom();
+}
+
+function renderAnswer(id, data) {
+  const textEl = document.getElementById(`${id}-text`);
+  textEl.classList.remove("streaming-cursor");
+  textEl.innerHTML = formatAnswer(data.answer);
+
+  // Citations
+  if (data.citations && data.citations.length) {
+    const citEl = document.getElementById(`${id}-citations`);
+    citEl.innerHTML = `
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Sources</p>
+      ${data.citations.map((c, i) => citationCard(c, i)).join("")}`;
+  }
+
+  // Feedback
+  const fbEl = document.getElementById(`${id}-feedback`);
+  fbEl.innerHTML = `
+    <span class="text-xs text-slate-400 mr-1">Was this helpful?</span>
+    <button onclick="sendFeedback('helpful','${id}')" class="fb-btn text-xs px-2 py-1 rounded-lg border border-slate-200 hover:bg-green-50 hover:border-green-300">👍 Yes</button>
+    <button onclick="sendFeedback('incorrect','${id}')" class="fb-btn text-xs px-2 py-1 rounded-lg border border-slate-200 hover:bg-red-50 hover:border-red-300">👎 Incorrect</button>
+    <button onclick="sendFeedback('incomplete','${id}')" class="fb-btn text-xs px-2 py-1 rounded-lg border border-slate-200 hover:bg-yellow-50 hover:border-yellow-300">⚠️ Incomplete</button>`;
+
+  // Latency meta
+  const lat = data.latency_ms;
+  document.getElementById(`${id}-meta`).textContent =
+    `${lat.total_ms}ms total · ${lat.retrieval_ms}ms retrieval · ${lat.generation_ms}ms generation`;
+
+  scrollBottom();
+}
+
+function citationCard(c, idx) {
+  const safeTitle = escHtml(c.document_title);
+  const safeSection = escHtml(c.section);
+  const safeText = escHtml(c.relevant_text);
+  return `
+    <details class="citation-card bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+      <summary class="px-4 py-2 cursor-pointer text-xs font-medium text-indigo-700 hover:bg-slate-100 flex items-center gap-2">
+        <span class="bg-indigo-100 text-indigo-600 rounded px-1.5 py-0.5">[${idx+1}]</span>
+        <span>${safeTitle} § ${safeSection}</span>
+      </summary>
+      <div class="px-4 pb-3 pt-1">
+        <p class="text-xs text-slate-600 leading-relaxed">${safeText}</p>
+      </div>
+    </details>`;
+}
+
+function renderError(id, msg) {
+  const el = document.getElementById(`${id}-text`);
+  el.classList.remove("streaming-cursor");
+  el.innerHTML = `<span class="text-red-500">Error: ${escHtml(msg)}</span>`;
+}
+
+function formatAnswer(text) {
+  // Basic markdown-lite: bold, bullets, newlines
+  return escHtml(text)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^• (.+)$/gm, "<li class='ml-4 list-disc'>$1</li>")
+    .replace(/\n/g, "<br/>");
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────
+async function sendFeedback(rating, msgId) {
+  if (!lastQueryId) return;
+  try {
+    await fetch(`${API_BASE}/api/v1/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query_id: lastQueryId, user_id: "web-user", rating })
+    });
+    const fbEl = document.getElementById(`${msgId}-feedback`);
+    fbEl.innerHTML = `<span class="text-xs text-green-600">✓ Feedback recorded. Thank you.</span>`;
+  } catch {}
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+function addToHistory(query) {
+  const list = document.getElementById("history-list");
+  const item = document.createElement("button");
+  item.className = "w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-600 truncate";
+  item.textContent = query;
+  item.onclick = () => sendQuery(query);
+  list.prepend(item);
+  if (list.children.length > 20) list.removeChild(list.lastChild);
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function escHtml(str = "") {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function scrollBottom() {
+  const msgs = document.getElementById("messages");
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+checkHealth();
+setInterval(checkHealth, 30000);
+document.getElementById("query-input").focus();
+</script>
+</body>
+</html>
