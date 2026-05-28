@@ -48,7 +48,7 @@ Answer + [Document § Section] citations
 
 ```bash
 # 1. Copy env file and fill in your Anthropic key
-cp .env.example .env
+cp .env
 
 # 2. Start Qdrant + API
 docker compose up -d
