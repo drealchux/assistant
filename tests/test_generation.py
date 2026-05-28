@@ -17,7 +17,7 @@ from backend.evaluation import (
 from backend.models import CompressedChunk, EvalQuestion
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
+# Fixtures 
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
@@ -55,7 +55,7 @@ def restricted_chunk() -> dict:
     }
 
 
-# ── ACL Filter ────────────────────────────────────────────────────────────────
+# ACL Filter
 
 class TestACLFilter:
     def test_public_chunk_always_accessible(self, public_chunk: dict):
@@ -90,7 +90,7 @@ class TestACLFilter:
         assert len(result) == 1
 
 
-# ── Evaluation Metrics ────────────────────────────────────────────────────────
+# Evaluation Metrics 
 
 class TestRetrievalMetrics:
     def test_recall_perfect(self):
@@ -122,7 +122,7 @@ class TestRetrievalMetrics:
         assert recall_at_k(["a", "b"], [], k=5) == 1.0
 
 
-# ── Evaluation Runner ─────────────────────────────────────────────────────────
+# Evaluation Runner 
 
 class TestEvaluationRunner:
     def test_summarize_empty(self, settings: Settings):

@@ -15,7 +15,7 @@ from backend.models import DocumentMetadata
 from backend.retrieval import BM25Index, reciprocal_rank_fusion
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
+# Fixtures 
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
@@ -54,7 +54,7 @@ def sample_chunks() -> list[dict]:
     ]
 
 
-# ── RecursiveTextSplitter ─────────────────────────────────────────────────────
+# RecursiveTextSplitter 
 
 class TestRecursiveTextSplitter:
     def test_short_text_not_split(self):
@@ -84,7 +84,7 @@ class TestRecursiveTextSplitter:
         assert splitter.split_text("   ") == []
 
 
-# ── DocumentChunker ───────────────────────────────────────────────────────────
+# DocumentChunker 
 
 class TestDocumentChunker:
     def test_creates_chunks_with_headers(self, sample_metadata: DocumentMetadata):
@@ -104,7 +104,7 @@ class TestDocumentChunker:
             assert c.chunk_index == i
 
 
-# ── BM25Index ─────────────────────────────────────────────────────────────────
+# BM25Index 
 
 class TestBM25Index:
     def test_build_and_search(self, settings: Settings, sample_chunks: list[dict]):
@@ -134,7 +134,7 @@ class TestBM25Index:
         assert results == []
 
 
-# ── RRF Fusion ────────────────────────────────────────────────────────────────
+# RRF Fusion 
 
 class TestRRF:
     def test_fuses_two_lists(self):
