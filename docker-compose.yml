@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
 
-  # ── Vector Store ────────────────────────────────────────────────────────────
+  # Vector Store 
   qdrant:
     image: qdrant/qdrant:latest
     container_name: rag_qdrant
@@ -20,7 +20,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # ── RAG API ──────────────────────────────────────────────────────────────────
+  # RAG API 
   rag-api:
     build:
       context: .
