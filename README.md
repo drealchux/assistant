@@ -6,43 +6,9 @@ Production-grade RAG system for answering employee questions against internal co
 
 ![Company Knowledge Copilot — Architecture Diagram](docs/architecture.png)
 
-## Architecture
-
-```
-Employee Query
-      │
-      ▼
-┌─────────────────────────────────────────────────────┐
-│                    RAG Pipeline                      │
-│                                                     │
-│  1. Query Expansion (Claude: 3-5 rewrites)          │
-│  2. Hybrid Retrieval                                │
-│     ├── Semantic  (Qdrant cosine, top-50)           │
-│     ├── Keyword   (BM25, top-50)                    │
-│     └── Fusion    (Reciprocal Rank Fusion)          │
-│  3. ACL Filter   (before reranking)                 │
-│  4. Reranking    (Cross-Encoder, top-50 → top-10)   │
-│  5. Compression  (Claude extracts relevant text)    │
-│  6. Generation   (Claude + citation instructions)   │
-└─────────────────────────────────────────────────────┘
-      │
-      ▼
-Answer + [Document § Section] citations
-```
-
 ## Stack
+![Technology Stack](docs/stack.png)
 
-| Layer | Technology |
-|---|---|
-| LLM | Anthropic Claude (claude-sonnet-4-6) |
-| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Vector Store | Qdrant |
-| Keyword Search | BM25 (rank-bm25) |
-| Reranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| API | FastAPI + uvicorn |
-| Frontend | Single-page HTML/Tailwind |
-| Observability | Prometheus + structlog |
-| Container | Docker + Docker Compose |
 
 ## Quick Start
 
